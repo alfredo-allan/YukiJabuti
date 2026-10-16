@@ -10,7 +10,8 @@ sys.path.insert(0, "/home/SEUUSUARIO/yukijabuti-backend")
 os.environ["FRONTEND_ORIGIN"] = "http://localhost:3000"
 # Gere uma chave com: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 os.environ["SECRET_KEY"] = "COLE-A-CHAVE-GERADA-AQUI"
-# Senha que a tutora digita na tela "Entrar para editar"
-os.environ["EDITOR_SENHA"] = "TROQUE-ESTA-SENHA"
+# A tutora cria a própria senha no primeiro acesso ao site.
+# Opcional: senha de resgate do adulto, se ela esquecer a dela (descomente para usar)
+# os.environ["EDITOR_SENHA"] = "SENHA-DE-RESGATE"
 
 from app import app as application  # noqa: E402

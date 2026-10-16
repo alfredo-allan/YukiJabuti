@@ -11,8 +11,9 @@ class Config:
     # Domínios do front-end liberados no CORS (separe vários por vírgula)
     FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")
     # Login da tutora: só quem sabe a senha altera; o resto do mundo só visualiza.
-    # Sem EDITOR_SENHA definida, ninguém consegue alterar nada.
+    # A tutora cria a senha no primeiro acesso (fica salva com hash no banco).
     SECRET_KEY = os.environ.get("SECRET_KEY")
+    # Opcional: senha de resgate do adulto, se ela esquecer a dela
     EDITOR_SENHA = os.environ.get("EDITOR_SENHA")
     TOKEN_VALIDADE_S = 180 * 24 * 3600  # 6 meses logada no aparelho
     # A foto chega já reduzida pelo front (~100 kB); este é só um teto de segurança

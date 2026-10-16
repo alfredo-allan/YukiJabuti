@@ -55,6 +55,12 @@ class Jabuti(db.Model):
         return d
 
 
+class Ajuste(db.Model):
+    """Chave/valor do servidor (ex.: hash da senha que a tutora criou)."""
+    chave = db.Column(db.String(40), primary_key=True)
+    valor = db.Column(db.Text, nullable=False)
+
+
 class Registro(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     jabuti_id = db.Column(db.Integer, db.ForeignKey("jabuti.id"), nullable=False)

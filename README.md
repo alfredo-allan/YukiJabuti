@@ -18,23 +18,30 @@ wsgi_pythonanywhere.py  modelo do arquivo WSGI
 ```bash
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-SECRET_KEY=dev EDITOR_SENHA=senha-local python app.py   # http://localhost:5000/api/saude
+SECRET_KEY=dev python app.py   # http://localhost:5000/api/saude
 ```
 
 ## Login da tutora
 
-Ler é público (quem recebe o link vê o diário). Criar, alterar e apagar exigem o token
-que `POST /api/login` devolve para quem acerta `EDITOR_SENHA`; o front manda esse token no
-cabeçalho `Authorization: Bearer ...`. Depois de 5 senhas erradas, aquele IP espera 15 minutos.
-Trocar `SECRET_KEY` desloga todos os aparelhos.
+Ler é público (quem recebe o link vê o diário). Criar, alterar e apagar exigem um token
+no cabeçalho `Authorization: Bearer ...`.
+
+- No primeiro acesso a tutora cria a senha (`POST /api/senha`); ela fica com hash no banco.
+  Depois disso essa rota fica bloqueada — crie a senha logo depois do deploy.
+- `POST /api/login` devolve o token. Depois de 5 senhas erradas, aquele IP espera 15 minutos.
+- `PUT /api/senha` troca a senha e desloga os outros aparelhos.
+- Esqueceu? Defina `EDITOR_SENHA` (senha de resgate) no WSGI, entre com ela e troque a senha em Ajustes.
+- Trocar `SECRET_KEY` desloga todos os aparelhos.
 
 ## Rotas
 
 | Método | Rota | O que faz |
 |---|---|---|
 | GET | /api/saude | teste rápido |
+| POST | /api/senha | primeiro acesso: cria a senha (`senha`) → `token` |
+| PUT | /api/senha | troca a senha (pede token) → `token` novo |
 | POST | /api/login | `senha` → `token` da tutora |
-| GET | /api/sessao | `editora: true/false` para o token enviado |
+| GET | /api/sessao | `editora` (token válido?) e `senha_criada` |
 | GET | /api/config | espécies aceitas e espécie padrão |
 | GET | /api/jabutis | lista os jabutis |
 | POST | /api/jabutis | cria (`nome`, `especie`, `sexo`, `nascimento`, `chegada`, `tutor`, `microchip`, `foto`) |

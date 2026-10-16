@@ -5,7 +5,8 @@ from functools import wraps
 
 from flask import Blueprint, abort, current_app, jsonify, request
 from itsdangerous import BadSignature, URLSafeTimedSerializer
-from models import Jabuti, Registro, db
+from werkzeug.security import check_password_hash, generate_password_hash
+from models import Ajuste, Jabuti, Registro, db
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
@@ -27,15 +28,39 @@ def _ip():
             or request.remote_addr or "?").strip()
 
 
+def _hash_senha():
+    a = db.session.get(Ajuste, "senha_hash")
+    return a.valor if a else None
+
+
+def _versao():
+    # Muda quando a senha muda: trocar a senha desloga os outros aparelhos
+    h = _hash_senha()
+    return h[-12:] if h else "resgate"
+
+
+def _novo_token():
+    return _assinador().dumps(_versao())
+
+
+def _validar_senha_nova(d):
+    senha = str(d.get("senha", ""))
+    if len(senha) < 4:
+        abort(400, "A senha precisa ter pelo menos 4 letras ou números.")
+    if len(senha) > 100:
+        abort(400, "Essa senha é comprida demais.")
+    return senha
+
+
 def _token_valido():
     cab = request.headers.get("Authorization", "")
     if not cab.startswith("Bearer "):
         return False
     try:
-        _assinador().loads(cab[7:], max_age=current_app.config["TOKEN_VALIDADE_S"])
-        return True
+        versao = _assinador().loads(cab[7:], max_age=current_app.config["TOKEN_VALIDADE_S"])
     except BadSignature:
         return False
+    return hmac.compare_digest(str(versao), _versao())
 
 
 def editora(f):
@@ -123,25 +148,50 @@ def saude():
 
 @api.post("/login")
 def login():
-    senha_certa = current_app.config["EDITOR_SENHA"]
-    if not senha_certa:
-        abort(401, "O login ainda não foi configurado no servidor.")
+    hash_senha, resgate = _hash_senha(), current_app.config["EDITOR_SENHA"]
+    if not hash_senha and not resgate:
+        abort(400, "Ainda não existe senha. Crie a sua primeiro.")
     ip, agora = _ip(), time.time()
     erros = [t for t in _tentativas.get(ip, []) if agora - t < JANELA_S]
     if len(erros) >= MAX_TENTATIVAS:
         abort(429, "Muitas tentativas. Espere 15 minutos e tente de novo.")
     senha = str((request.get_json(silent=True) or {}).get("senha", ""))
-    if not hmac.compare_digest(senha.encode(), senha_certa.encode()):
+    # EDITOR_SENHA (opcional, no WSGI) é a senha de resgate do adulto, caso ela esqueça a dela
+    certa = (hash_senha and check_password_hash(hash_senha, senha)) or (
+        resgate and hmac.compare_digest(senha.encode(), resgate.encode()))
+    if not certa:
         _tentativas[ip] = erros + [agora]
         time.sleep(1)
         abort(401, "Senha errada. Tente de novo.")
     _tentativas.pop(ip, None)
-    return jsonify({"token": _assinador().dumps("editora")})
+    return jsonify({"token": _novo_token()})
+
+
+@api.post("/senha")
+def criar_senha():
+    """Primeiro acesso: a tutora cria a própria senha. Só funciona enquanto não existe nenhuma."""
+    if _hash_senha():
+        abort(400, "A senha já foi criada. Use a tela de entrar.")
+    senha = _validar_senha_nova(request.get_json(silent=True) or {})
+    db.session.add(Ajuste(chave="senha_hash", valor=generate_password_hash(senha)))
+    db.session.commit()
+    return jsonify({"token": _novo_token()}), 201
+
+
+@api.put("/senha")
+@editora
+def trocar_senha():
+    senha = _validar_senha_nova(request.get_json(silent=True) or {})
+    a = db.session.get(Ajuste, "senha_hash") or Ajuste(chave="senha_hash")
+    a.valor = generate_password_hash(senha)
+    db.session.add(a)
+    db.session.commit()
+    return jsonify({"token": _novo_token()})
 
 
 @api.get("/sessao")
 def sessao():
-    return jsonify({"editora": _token_valido()})
+    return jsonify({"editora": _token_valido(), "senha_criada": bool(_hash_senha())})
 
 
 @api.get("/config")
