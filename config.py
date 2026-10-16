@@ -9,7 +9,9 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Domínios do front-end liberados no CORS (separe vários por vírgula)
-    FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")
+    FRONTEND_ORIGIN = os.environ.get(
+        "FRONTEND_ORIGIN", "http://localhost:3000,https://yuki-jabuti-web-site.vercel.app"
+    )
     # Login da tutora: só quem sabe a senha altera; o resto do mundo só visualiza.
     # A tutora cria a senha no primeiro acesso (fica salva com hash no banco).
     SECRET_KEY = os.environ.get("SECRET_KEY")

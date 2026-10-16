@@ -5,9 +5,8 @@ import os
 import sys
 
 sys.path.insert(0, "/home/SEUUSUARIO/yukijabuti-backend")
-# Por enquanto só o front local; depois do deploy da Vercel, acrescente o domínio separado por vírgula:
-# "http://localhost:3000,https://SEU-PROJETO.vercel.app"
-os.environ["FRONTEND_ORIGIN"] = "http://localhost:3000"
+# O CORS já vem do config.py (localhost + Vercel). Só defina aqui para trocar os domínios:
+# os.environ["FRONTEND_ORIGIN"] = "http://localhost:3000,https://SEU-PROJETO.vercel.app"
 # Gere uma chave com: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 os.environ["SECRET_KEY"] = "COLE-A-CHAVE-GERADA-AQUI"
 # A tutora cria a própria senha no primeiro acesso ao site.
