@@ -18,9 +18,10 @@ class Config:
     # Opcional: senha de resgate do adulto, se ela esquecer a dela
     EDITOR_SENHA = os.environ.get("EDITOR_SENHA")
     TOKEN_VALIDADE_S = 180 * 24 * 3600  # 6 meses logada no aparelho
-    # A foto chega já reduzida pelo front (~100 kB); este é só um teto de segurança
-    MAX_FOTO_BYTES = 1_500_000
-    MAX_CONTENT_LENGTH = 3 * 1024 * 1024
+    MAX_FOTO_BYTES = 20 * 1024 * 1024
+    MAX_VIDEO_BYTES = 100 * 1024 * 1024
+    # Base64 expands the media by about one third; leave room for JSON metadata.
+    MAX_CONTENT_LENGTH = 140 * 1024 * 1024
 
     ESPECIES = ("piranga", "tinga", "outra")
     ESPECIE_PADRAO = "piranga"

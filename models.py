@@ -18,11 +18,16 @@ class Jabuti(db.Model):
     tutor = db.Column(db.String(60), default="")
     microchip = db.Column(db.String(40), default="")
     foto = db.Column(db.Text)  # data URL (image/jpeg base64)
+    foto_tipo = db.Column(db.String(30))
     criado_em = db.Column(db.Date, default=date.today)
 
     registros = db.relationship(
         "Registro", backref="jabuti", cascade="all, delete-orphan",
         order_by="(Registro.data, Registro.id)",
+    )
+    fotos = db.relationship(
+        "PetFoto", backref="jabuti", cascade="all, delete-orphan",
+        order_by="(PetFoto.data, PetFoto.id)",
     )
 
     @property
@@ -44,6 +49,7 @@ class Jabuti(db.Model):
             "tutor": self.tutor,
             "microchip": self.microchip,
             "foto": self.foto,
+            "foto_tipo": self.foto_tipo,
             "criado_em": _iso(self.criado_em),
             "total_registros": len(self.registros),
             "total_medidas": len(medidas),
@@ -72,6 +78,8 @@ class Registro(db.Model):
     sol = db.Column(db.Boolean, default=False)
     humor = db.Column(db.String(20), default="feliz")
     observacao = db.Column(db.String(300), default="")
+    foto = db.Column(db.Text)
+    foto_tipo = db.Column(db.String(30))
 
     def to_dict(self):
         return {
@@ -84,4 +92,26 @@ class Registro(db.Model):
             "sol": self.sol,
             "humor": self.humor,
             "observacao": self.observacao,
+            "foto": self.foto,
+            "foto_tipo": self.foto_tipo,
+        }
+
+
+class PetFoto(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    jabuti_id = db.Column(db.Integer, db.ForeignKey("jabuti.id"), nullable=False)
+    foto = db.Column(db.Text, nullable=False)
+    tipo = db.Column(db.String(30), nullable=False, default="image/jpeg")
+    legenda = db.Column(db.String(200), default="")
+    data = db.Column(db.Date, nullable=False, default=date.today)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "jabuti_id": self.jabuti_id,
+            "foto": self.foto,
+            "tipo": self.tipo,
+            "media_type": self.tipo,
+            "legenda": self.legenda,
+            "data": _iso(self.data),
         }

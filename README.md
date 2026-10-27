@@ -48,12 +48,20 @@ no cabeçalho `Authorization: Bearer ...`.
 | GET | /api/jabutis/:id | jabuti com todos os registros |
 | PATCH | /api/jabutis/:id | altera só os campos enviados (ex.: nova foto) |
 | DELETE | /api/jabutis/:id | apaga jabuti e registros |
-| POST | /api/jabutis/:id/registros | dia/medida: `data, peso_g, comprimento_cm, comeu, banho, sol, humor, observacao` |
+| POST | /api/jabutis/:id/registros | dia/medida: `data, peso_g, comprimento_cm, comeu, banho, sol, humor, observacao, foto` |
+| GET | /api/jabutis/:id/fotos | galeria pública do jabuti |
+| POST | /api/jabutis/:id/fotos | adiciona mídia à galeria (`foto`/`imagem`, `legenda`, `data`) |
 | DELETE | /api/registros/:id | apaga um registro |
+| DELETE | /api/fotos/:id | apaga uma mídia da galeria |
 
 POST, PATCH e DELETE pedem o token da tutora (sem ele: 401).
 
-`especie`: `piranga` (padrão), `tinga` ou `outra`. `foto`: data URL de imagem (o front já reduz para ~600 px).
+`especie`: `piranga` (padrão), `tinga` ou `outra`. Os campos `foto` aceitam data URLs
+JPEG, PNG, GIF e WebP de até **20 MB decodificados**. A galeria e `Registro.foto`
+também aceitam vídeos MP4, WebM e MOV (`video/quicktime`) de até **100 MB decodificados**.
+O MIME declarado precisa corresponder à assinatura do arquivo; base64 inválido e conteúdo
+malformado são rejeitados. As respostas mantêm `foto` e acrescentam `foto_tipo`; itens
+da galeria usam `tipo` (também exposto como `media_type`).
 
 ## Deploy no PythonAnywhere
 
@@ -64,5 +72,8 @@ POST, PATCH e DELETE pedem o token da tutora (sem ele: 401).
 5. Cole o conteúdo de `wsgi_pythonanywhere.py` no arquivo WSGI, ajustando usuário e domínio da Vercel
 6. **Reload** e teste `https://SEUUSUARIO.pythonanywhere.com/api/saude`
 
-> Mudou as tabelas? Como é SQLite e ainda está no começo, basta apagar `yuki.db` para recriar.
-> Quando houver dados reais, vale adicionar Flask-Migrate.
+O startup chama `create_all()` e aplica apenas `ALTER TABLE` para colunas novas (`foto_tipo`
+e os campos de mídia de `Registro`); não apaga nem recria o banco existente. A tabela de
+galeria é criada automaticamente. O limite HTTP é 140 MiB para acomodar a expansão base64
+de um vídeo de 100 MB e o JSON. Em PythonAnywhere, confirme também que o proxy/web app
+aceita esse request; o Flask responderá HTTP 413 quando o limite for excedido.

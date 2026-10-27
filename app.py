@@ -4,6 +4,8 @@ from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 from config import Config
+from sqlalchemy import inspect, text
+
 from models import db
 from routes import api
 
@@ -29,7 +31,25 @@ def create_app(config=Config):
 
     with app.app_context():
         db.create_all()
+        _migrar_schema()
     return app
+
+
+def _migrar_schema():
+    """Adds columns introduced after the initial SQLite schema without resetting data."""
+    inspector = inspect(db.engine)
+    additions = {
+        "jabuti": {"foto_tipo": "VARCHAR(30)"},
+        "registro": {"foto": "TEXT", "foto_tipo": "VARCHAR(30)"},
+    }
+    for table, columns in additions.items():
+        existing = {column["name"] for column in inspector.get_columns(table)}
+        for name, definition in columns.items():
+            if name not in existing:
+                db.session.execute(text(
+                    f'ALTER TABLE "{table}" ADD COLUMN "{name}" {definition}'
+                ))
+    db.session.commit()
 
 
 app = create_app()

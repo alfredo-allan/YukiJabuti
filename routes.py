@@ -1,4 +1,7 @@
+import base64
+import binascii
 import hmac
+import re
 import time
 from datetime import date
 from functools import wraps
@@ -6,7 +9,7 @@ from functools import wraps
 from flask import Blueprint, abort, current_app, jsonify, request
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
-from models import Ajuste, Jabuti, Registro, db
+from models import Ajuste, Jabuti, PetFoto, Registro, db
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
@@ -102,14 +105,54 @@ def _texto(v, limite):
     return (v or "").strip()[:limite]
 
 
-def _foto(v):
+_MEDIA_RE = re.compile(
+    r"data:(image/(?:jpeg|png|gif|webp)|video/(?:mp4|webm|quicktime));base64,([A-Za-z0-9+/=]+)",
+    re.IGNORECASE,
+)
+
+
+def _validar_midia(v, allow_video=True):
     if v in (None, ""):
-        return None
-    if not isinstance(v, str) or not v.startswith("data:image/"):
-        abort(400, "A foto precisa ser uma imagem.")
-    if len(v) > current_app.config["MAX_FOTO_BYTES"]:
-        abort(400, "A foto é grande demais. Tente outra.")
-    return v
+        return None, None
+    if not isinstance(v, str):
+        abort(400, "A mídia precisa ser uma imagem ou vídeo em data URL.")
+    match = _MEDIA_RE.fullmatch(v)
+    if not match:
+        abort(400, "A mídia precisa ser JPEG, PNG, GIF, WebP, MP4, WebM ou MOV em data URL.")
+    mime, encoded = match.groups()
+    mime = mime.lower()
+    if not allow_video and mime.startswith("video/"):
+        abort(400, "Este campo aceita somente imagens.")
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        abort(400, "A mídia está corrompida.")
+    if not decoded:
+        abort(400, "A mídia está vazia.")
+    limite = (
+        current_app.config["MAX_VIDEO_BYTES"]
+        if mime.startswith("video/")
+        else current_app.config["MAX_FOTO_BYTES"]
+    )
+    if len(decoded) > limite:
+        tipo = "vídeo" if mime.startswith("video/") else "foto"
+        abort(400, f"O {tipo} é grande demais. Tente outro arquivo.")
+    signatures = {
+        "image/jpeg": decoded.startswith(b"\xff\xd8\xff"),
+        "image/png": decoded.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/gif": decoded.startswith((b"GIF87a", b"GIF89a")),
+        "image/webp": len(decoded) >= 12 and decoded[:4] == b"RIFF" and decoded[8:12] == b"WEBP",
+        "video/webm": decoded.startswith(b"\x1a\x45\xdf\xa3"),
+        "video/mp4": len(decoded) >= 12 and decoded[4:8] == b"ftyp",
+        "video/quicktime": len(decoded) >= 12 and decoded[4:8] == b"ftyp",
+    }
+    if not signatures[mime]:
+        abort(400, "O conteúdo da mídia não corresponde ao formato informado.")
+    return v, mime
+
+
+def _foto(v):
+    return _validar_midia(v, allow_video=False)[0]
 
 
 def _aplicar(j, dados, novo=False):
@@ -137,7 +180,7 @@ def _aplicar(j, dados, novo=False):
     if "microchip" in dados:
         j.microchip = _texto(dados["microchip"], 40)
     if "foto" in dados:
-        j.foto = _foto(dados["foto"])
+        j.foto, j.foto_tipo = _validar_midia(dados["foto"], allow_video=False)
 
 
 # ---------- rotas ----------
@@ -247,6 +290,7 @@ def registrar(jid):
     humor = d.get("humor") or "feliz"
     if humor not in HUMORES:
         abort(400, "Humor inválido.")
+    foto, foto_tipo = _validar_midia(d.get("foto"), allow_video=True)
     r = Registro(
         jabuti=j,
         data=_data(d.get("data")) or date.today(),
@@ -257,10 +301,38 @@ def registrar(jid):
         sol=bool(d.get("sol")),
         humor=humor,
         observacao=_texto(d.get("observacao"), 300),
+        foto=foto,
+        foto_tipo=foto_tipo,
     )
     db.session.add(r)
     db.session.commit()
     return jsonify(r.to_dict()), 201
+
+
+@api.get("/jabutis/<int:jid>/fotos")
+def listar_fotos(jid):
+    j = db.get_or_404(Jabuti, jid, description="Jabuti não encontrado.")
+    return jsonify([foto.to_dict() for foto in j.fotos])
+
+
+@api.post("/jabutis/<int:jid>/fotos")
+@editora
+def adicionar_foto(jid):
+    j = db.get_or_404(Jabuti, jid, description="Jabuti não encontrado.")
+    d = request.get_json(silent=True) or {}
+    foto, tipo = _validar_midia(d.get("foto", d.get("imagem")), allow_video=True)
+    if not foto:
+        abort(400, "A mídia é obrigatória.")
+    registro = PetFoto(
+        jabuti=j,
+        foto=foto,
+        tipo=tipo,
+        legenda=_texto(d.get("legenda", d.get("caption")), 200),
+        data=_data(d.get("data", d.get("date"))) or date.today(),
+    )
+    db.session.add(registro)
+    db.session.commit()
+    return jsonify(registro.to_dict()), 201
 
 
 @api.delete("/registros/<int:rid>")
@@ -268,5 +340,14 @@ def registrar(jid):
 def apagar_registro(rid):
     r = db.get_or_404(Registro, rid, description="Registro não encontrado.")
     db.session.delete(r)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@api.delete("/fotos/<int:foto_id>")
+@editora
+def apagar_foto(foto_id):
+    foto = db.get_or_404(PetFoto, foto_id, description="Mídia não encontrada.")
+    db.session.delete(foto)
     db.session.commit()
     return jsonify({"ok": True})
