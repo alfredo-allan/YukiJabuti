@@ -51,6 +51,7 @@ no cabeçalho `Authorization: Bearer ...`.
 | POST | /api/jabutis/:id/registros | dia/medida: `data, peso_g, comprimento_cm, comeu, banho, sol, humor, observacao, foto` |
 | GET | /api/jabutis/:id/fotos | galeria pública do jabuti |
 | POST | /api/jabutis/:id/fotos | adiciona mídia à galeria (`foto`/`imagem`, `legenda`, `data`) |
+| PATCH | /api/fotos/:id | altera somente a descrição (`legenda` ou `caption`) |
 | DELETE | /api/registros/:id | apaga um registro |
 | DELETE | /api/fotos/:id | apaga uma mídia da galeria |
 

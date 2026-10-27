@@ -88,6 +88,46 @@ class TestMedia(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json["foto_tipo"], "video/mp4")
 
+    def test_updates_gallery_caption_without_changing_media_or_date(self):
+        media = data_url("video/webm", b"\x1a\x45\xdf\xa3" + b"\x00" * 8)
+        headers = {"Authorization": f"Bearer {self.token}"}
+        created = self.client.post(
+            f"/api/jabutis/{self.jabuti_id}/fotos",
+            json={"foto": media, "legenda": "antes", "data": "2026-01-02"},
+            headers=headers,
+        ).json
+
+        response = self.client.patch(
+            f"/api/fotos/{created['id']}",
+            json={"caption": "depois"},
+            headers=headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["legenda"], "depois")
+        self.assertEqual(response.json["foto"], media)
+        self.assertEqual(response.json["tipo"], "video/webm")
+        self.assertEqual(response.json["data"], "2026-01-02")
+
+    def test_gallery_caption_update_requires_authentication_and_caption(self):
+        media = data_url("video/webm", b"\x1a\x45\xdf\xa3" + b"\x00" * 8)
+        headers = {"Authorization": f"Bearer {self.token}"}
+        created = self.client.post(
+            f"/api/jabutis/{self.jabuti_id}/fotos",
+            json={"foto": media},
+            headers=headers,
+        ).json
+
+        unauthorized = self.client.patch(
+            f"/api/fotos/{created['id']}", json={"legenda": "novo"}
+        )
+        missing_caption = self.client.patch(
+            f"/api/fotos/{created['id']}", json={}, headers=headers
+        )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(missing_caption.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

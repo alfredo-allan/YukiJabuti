@@ -351,3 +351,15 @@ def apagar_foto(foto_id):
     db.session.delete(foto)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@api.patch("/fotos/<int:foto_id>")
+@editora
+def editar_foto(foto_id):
+    foto = db.get_or_404(PetFoto, foto_id, description="Mídia não encontrada.")
+    dados = request.get_json(silent=True) or {}
+    if "legenda" not in dados and "caption" not in dados:
+        abort(400, "Envie a legenda ou caption.")
+    foto.legenda = _texto(dados.get("legenda", dados.get("caption")), 200)
+    db.session.commit()
+    return jsonify(foto.to_dict())
