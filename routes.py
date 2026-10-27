@@ -1,4 +1,7 @@
+import base64
+import binascii
 import hmac
+import re
 import time
 from datetime import date
 from functools import wraps
@@ -6,7 +9,7 @@ from functools import wraps
 from flask import Blueprint, abort, current_app, jsonify, request
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
-from models import Ajuste, Jabuti, Registro, db
+from models import Ajuste, Jabuti, PetFoto, Registro, db
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
@@ -105,10 +108,26 @@ def _texto(v, limite):
 def _foto(v):
     if v in (None, ""):
         return None
-    if not isinstance(v, str) or not v.startswith("data:image/"):
+    if not isinstance(v, str):
         abort(400, "A foto precisa ser uma imagem.")
-    if len(v) > current_app.config["MAX_FOTO_BYTES"]:
+    match = re.fullmatch(r"data:(image/(?:jpeg|png|gif|webp));base64,([A-Za-z0-9+/=]+)", v, re.IGNORECASE)
+    if not match:
+        abort(400, "A foto precisa ser uma imagem JPEG, PNG, GIF ou WebP em data URL.")
+    mime, encoded = match.groups()
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        abort(400, "A foto está corrompida.")
+    if len(decoded) > current_app.config["MAX_FOTO_BYTES"]:
         abort(400, "A foto é grande demais. Tente outra.")
+    signatures = {
+        "image/jpeg": decoded.startswith(b"\xff\xd8\xff"),
+        "image/png": decoded.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/gif": decoded.startswith((b"GIF87a", b"GIF89a")),
+        "image/webp": len(decoded) >= 12 and decoded[:4] == b"RIFF" and decoded[8:12] == b"WEBP",
+    }
+    if not signatures[mime.lower()]:
+        abort(400, "O conteúdo da foto não corresponde ao formato informado.")
     return v
 
 
@@ -257,10 +276,39 @@ def registrar(jid):
         sol=bool(d.get("sol")),
         humor=humor,
         observacao=_texto(d.get("observacao"), 300),
+        foto=_foto(d.get("foto")),
     )
     db.session.add(r)
     db.session.commit()
     return jsonify(r.to_dict()), 201
+
+
+@api.get("/jabutis/<int:jid>/fotos")
+def listar_fotos(jid):
+    j = db.get_or_404(Jabuti, jid, description="Jabuti não encontrado.")
+    return jsonify([foto.to_dict() for foto in j.fotos])
+
+
+@api.post("/jabutis/<int:jid>/fotos")
+@editora
+def adicionar_foto(jid):
+    j = db.get_or_404(Jabuti, jid, description="Jabuti não encontrado.")
+    d = request.get_json(silent=True) or {}
+    imagem = d.get("foto", d.get("imagem"))
+    foto = _foto(imagem)
+    if not foto:
+        abort(400, "A foto é obrigatória.")
+    legenda = d.get("legenda", d.get("caption"))
+    data_foto = d.get("data", d.get("date"))
+    registro = PetFoto(
+        jabuti=j,
+        foto=foto,
+        legenda=_texto(legenda, 200),
+        data=_data(data_foto) or date.today(),
+    )
+    db.session.add(registro)
+    db.session.commit()
+    return jsonify(registro.to_dict()), 201
 
 
 @api.delete("/registros/<int:rid>")
@@ -268,5 +316,14 @@ def registrar(jid):
 def apagar_registro(rid):
     r = db.get_or_404(Registro, rid, description="Registro não encontrado.")
     db.session.delete(r)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@api.delete("/fotos/<int:foto_id>")
+@editora
+def apagar_foto(foto_id):
+    foto = db.get_or_404(PetFoto, foto_id, description="Foto não encontrada.")
+    db.session.delete(foto)
     db.session.commit()
     return jsonify({"ok": True})

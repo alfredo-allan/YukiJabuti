@@ -1,6 +1,7 @@
 """API do Yuki Jabuti — Flask + SQLite (pronta para o PythonAnywhere)."""
 from flask import Flask, jsonify
 from flask_cors import CORS
+from sqlalchemy import inspect, text
 from werkzeug.exceptions import HTTPException
 
 from config import Config
@@ -29,7 +30,18 @@ def create_app(config=Config):
 
     with app.app_context():
         db.create_all()
+        _migrar_sqlite()
     return app
+
+
+def _migrar_sqlite():
+    """Adds nullable columns needed by newer code without breaking old SQLite data."""
+    if db.engine.dialect.name != "sqlite":
+        return
+    columns = {column["name"] for column in inspect(db.engine).get_columns("registro")}
+    if "foto" not in columns:
+        db.session.execute(text("ALTER TABLE registro ADD COLUMN foto TEXT"))
+        db.session.commit()
 
 
 app = create_app()

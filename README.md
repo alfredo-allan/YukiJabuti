@@ -48,12 +48,18 @@ no cabeçalho `Authorization: Bearer ...`.
 | GET | /api/jabutis/:id | jabuti com todos os registros |
 | PATCH | /api/jabutis/:id | altera só os campos enviados (ex.: nova foto) |
 | DELETE | /api/jabutis/:id | apaga jabuti e registros |
-| POST | /api/jabutis/:id/registros | dia/medida: `data, peso_g, comprimento_cm, comeu, banho, sol, humor, observacao` |
+| POST | /api/jabutis/:id/registros | dia/medida: `data, peso_g, comprimento_cm, comeu, banho, sol, humor, observacao, foto` |
 | DELETE | /api/registros/:id | apaga um registro |
+| GET | /api/jabutis/:id/fotos | galeria pública de fotos |
+| POST | /api/jabutis/:id/fotos | adiciona foto à galeria: `foto` (ou `imagem`), `legenda` (ou `caption`), `data` (ou `date`) |
+| DELETE | /api/fotos/:id | apaga uma foto da galeria |
 
 POST, PATCH e DELETE pedem o token da tutora (sem ele: 401).
 
-`especie`: `piranga` (padrão), `tinga` ou `outra`. `foto`: data URL de imagem (o front já reduz para ~600 px).
+`especie`: `piranga` (padrão), `tinga` ou `outra`. `foto`: data URL JPEG, PNG, GIF ou WebP
+(o front já reduz para ~600 px). O servidor valida o base64, a assinatura do arquivo e limita
+o conteúdo decodificado a 1,5 MB. A foto do diário é opcional; a galeria usa `PetFoto` para
+permitir várias fotos por jabuti.
 
 ## Deploy no PythonAnywhere
 
@@ -64,5 +70,5 @@ POST, PATCH e DELETE pedem o token da tutora (sem ele: 401).
 5. Cole o conteúdo de `wsgi_pythonanywhere.py` no arquivo WSGI, ajustando usuário e domínio da Vercel
 6. **Reload** e teste `https://SEUUSUARIO.pythonanywhere.com/api/saude`
 
-> Mudou as tabelas? Como é SQLite e ainda está no começo, basta apagar `yuki.db` para recriar.
-> Quando houver dados reais, vale adicionar Flask-Migrate.
+> A inicialização cria a tabela da galeria e adiciona automaticamente a coluna nullable `foto`
+> em bancos SQLite existentes; não é necessário apagar `yuki.db` no deploy.
